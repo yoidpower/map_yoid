@@ -2,29 +2,14 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 
-function env(string $key, string $default = ''): string {
-    return $_ENV[$key] ?? getenv($key) ?: $default;
-}
+$sourceUrl = getenv('PARTNERS_MAP_URL') ?: 'https://partners.yoidpower.com/devicesMap';
 
-$host  = env('DB_HOST');
-$name  = env('DB_NAME');
-$user  = env('DB_USER');
-$pass  = env('DB_PASS');
-
-$table          = env('DB_STATIONS_TABLE',  'stations');
-$colId          = env('DB_COL_ID',          'station_id');
-$colTitle       = env('DB_COL_TITLE',       'station_location_title');
-$colAddress     = env('DB_COL_ADDRESS',     'station_address_data');
-$colSerial      = env('DB_COL_SERIAL',      'station_serial_number');
-$colStatusId    = env('DB_COL_STATUS_ID',   'station_status_id');
-$statusOnline   = env('DB_STATUS_ONLINE',   '4');   // status_id = 4 means activated/online
-
-/* ── Demo stations — used when DB is not yet configured ── */
+/* ── Demo fallback — shown when the partners page is unreachable ── */
 $demoStations = [
     [
         'id'      => 1,
         'title'   => 'Nayax B.V.',
-        'serial'  => 'GT042250901224',
+        'serial'  => '',
         'online'  => true,
         'lat'     => 52.25325489999999,
         'lng'     => 4.6354539,
@@ -33,7 +18,7 @@ $demoStations = [
     [
         'id'      => 2,
         'title'   => 'Savor Restaurant',
-        'serial'  => 'GT042250805332',
+        'serial'  => '',
         'online'  => true,
         'lat'     => 51.30639739999999,
         'lng'     => 3.3884127,
@@ -42,7 +27,7 @@ $demoStations = [
     [
         'id'      => 3,
         'title'   => 'YOID Office',
-        'serial'  => 'GT042241008260',
+        'serial'  => '',
         'online'  => true,
         'lat'     => 51.9155,
         'lng'     => 4.2537,
@@ -50,48 +35,54 @@ $demoStations = [
     ],
 ];
 
-if (!$host || !$name) {
-    echo json_encode(['stations' => $demoStations, 'source' => 'demo']);
+/* ── Fetch partners map page ── */
+$ctx = stream_context_create([
+    'http' => [
+        'timeout'    => 10,
+        'user_agent' => 'YOID-Map/1.0',
+    ],
+]);
+
+$html = @file_get_contents($sourceUrl, false, $ctx);
+
+if ($html === false) {
+    echo json_encode(['stations' => $demoStations, 'source' => 'demo', 'error' => 'Could not fetch partners page']);
     exit;
 }
 
-try {
-    $pdo = new PDO(
-        "mysql:host=$host;dbname=$name;charset=utf8mb4",
-        $user, $pass,
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 3]
-    );
+/* ── Parse hidden inputs ── */
+$dom = new DOMDocument();
+@$dom->loadHTML($html, LIBXML_NOERROR);
 
-    $sql = "SELECT `$colId`, `$colTitle`, `$colAddress`, `$colSerial`
-            FROM `$table`
-            WHERE `$colStatusId` = $statusOnline
-            ORDER BY `$colTitle`";
+$stations = [];
+$i = 1;
 
-    $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-
-    $stations = [];
-    foreach ($rows as $row) {
-        $raw = $row[$colAddress] ?? '';
-        $geo = json_decode(urldecode($raw), true);
-
-        if (!isset($geo['geometry']['lat'], $geo['geometry']['lng'])) {
-            continue;
-        }
-
-        $stations[] = [
-            'id'      => $row[$colId],
-            'title'   => $row[$colTitle] ?? '',
-            'serial'  => $row[$colSerial] ?? '',
-            'online'  => true,   // all rows returned have status_id = online
-            'lat'     => (float)$geo['geometry']['lat'],
-            'lng'     => (float)$geo['geometry']['lng'],
-            'address' => str_replace('+', ' ', $geo['formatted_address'] ?? ''),
-        ];
+foreach ($dom->getElementsByTagName('input') as $input) {
+    if ($input->getAttribute('devices_map_input') !== 'true') {
+        continue;
     }
 
-    echo json_encode(['stations' => $stations, 'source' => 'db']);
+    $raw = urldecode($input->getAttribute('data'));
+    $geo = json_decode($raw, true);
 
-} catch (Exception $e) {
-    // DB unreachable — serve demo data so the map still works
-    echo json_encode(['stations' => $demoStations, 'source' => 'demo', 'db_error' => $e->getMessage()]);
+    if (!isset($geo['geometry']['lat'], $geo['geometry']['lng'])) {
+        continue;
+    }
+
+    $stations[] = [
+        'id'      => $i++,
+        'title'   => html_entity_decode($input->getAttribute('station-title'), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+        'serial'  => '',
+        'online'  => true,
+        'lat'     => (float)$geo['geometry']['lat'],
+        'lng'     => (float)$geo['geometry']['lng'],
+        'address' => str_replace('+', ' ', $geo['formatted_address'] ?? ''),
+    ];
 }
+
+if (empty($stations)) {
+    echo json_encode(['stations' => $demoStations, 'source' => 'demo', 'error' => 'No stations parsed from partners page']);
+    exit;
+}
+
+echo json_encode(['stations' => $stations, 'source' => 'partners']);
