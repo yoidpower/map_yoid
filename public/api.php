@@ -11,13 +11,13 @@ $name  = env('DB_NAME');
 $user  = env('DB_USER');
 $pass  = env('DB_PASS');
 
-$table      = env('DB_STATIONS_TABLE', 'stations');
-$colId      = env('DB_COL_ID',      'station_id');
-$colTitle   = env('DB_COL_TITLE',   'station_location_title');
-$colOnline  = env('DB_COL_ONLINE',  'station_is_online');
-$colAddress = env('DB_COL_ADDRESS', 'station_address_data');
-$colSerial  = env('DB_COL_SERIAL',  'station_serial_number');
-$colActive  = env('DB_ACTIVE_FILTER', 'station_is_active');
+$table          = env('DB_STATIONS_TABLE',  'stations');
+$colId          = env('DB_COL_ID',          'station_id');
+$colTitle       = env('DB_COL_TITLE',       'station_location_title');
+$colAddress     = env('DB_COL_ADDRESS',     'station_address_data');
+$colSerial      = env('DB_COL_SERIAL',      'station_serial_number');
+$colStatusId    = env('DB_COL_STATUS_ID',   'station_status_id');
+$statusOnline   = env('DB_STATUS_ONLINE',   '4');   // status_id = 4 means activated/online
 
 /* ── Demo stations — used when DB is not yet configured ── */
 $demoStations = [
@@ -62,12 +62,10 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 3]
     );
 
-    $onlineOnly = isset($_GET['online']) && $_GET['online'] === '1';
-    $sql = "SELECT `$colId`, `$colTitle`, `$colOnline`, `$colAddress`, `$colSerial`
+    $sql = "SELECT `$colId`, `$colTitle`, `$colAddress`, `$colSerial`
             FROM `$table`
-            WHERE `$colActive` = 1"
-         . ($onlineOnly ? " AND `$colOnline` = 1" : "")
-         . " ORDER BY `$colTitle`";
+            WHERE `$colStatusId` = $statusOnline
+            ORDER BY `$colTitle`";
 
     $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
@@ -84,7 +82,7 @@ try {
             'id'      => $row[$colId],
             'title'   => $row[$colTitle] ?? '',
             'serial'  => $row[$colSerial] ?? '',
-            'online'  => (bool)(int)($row[$colOnline] ?? 0),
+            'online'  => true,   // all rows returned have status_id = online
             'lat'     => (float)$geo['geometry']['lat'],
             'lng'     => (float)$geo['geometry']['lng'],
             'address' => str_replace('+', ' ', $geo['formatted_address'] ?? ''),
