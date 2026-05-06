@@ -1,0 +1,25 @@
+services:
+  map-yoid:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: map-yoid:latest
+    container_name: map-yoid
+    restart: unless-stopped
+    expose:
+      - "80"
+    env_file:
+      - .env
+    environment:
+      VIRTUAL_HOST: map.yoidpower.com
+      LETSENCRYPT_HOST: map.yoidpower.com
+      LETSENCRYPT_EMAIL: admin@yoidpower.com
+    networks:
+      - yoidpower_proxy-tier
+      - yoidpower_backend
+
+networks:
+  yoidpower_proxy-tier:
+    external: true
+  yoidpower_backend:
+    external: true
