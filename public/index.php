@@ -107,20 +107,38 @@ $mapsKey = $_ENV['GOOGLE_MAPS_KEY'] ?? getenv('GOOGLE_MAPS_KEY') ?: 'AIzaSyB27M0
 <script src="https://unpkg.com/@googlemaps/markerclusterer@2/dist/index.min.js"></script>
 <script>
 var MAP_STYLES = [
-    { elementType: 'all',              stylers: [{ saturation: -100 }] },
-    { featureType: 'landscape',        elementType: 'geometry',        stylers: [{ lightness: 95 }] },
-    { featureType: 'administrative',   elementType: 'geometry',        stylers: [{ lightness: 80 }] },
-    { featureType: 'road',             elementType: 'geometry',        stylers: [{ lightness: 100 }] },
-    { featureType: 'road',             elementType: 'geometry.stroke', stylers: [{ lightness: 70 }] },
-    { featureType: 'road.highway',     elementType: 'geometry',        stylers: [{ lightness: 88 }] },
-    { featureType: 'road.highway',     elementType: 'geometry.stroke', stylers: [{ lightness: 60 }] },
-    { featureType: 'water',            elementType: 'geometry',        stylers: [{ lightness: 60 }] },
-    { featureType: 'poi',              elementType: 'geometry',        stylers: [{ lightness: 90 }] },
-    { featureType: 'poi.park',         elementType: 'geometry',        stylers: [{ lightness: 85 }] },
-    { featureType: 'transit.line',     elementType: 'geometry',        stylers: [{ lightness: 75 }] },
-    { elementType: 'labels.icon',      stylers: [{ visibility: 'off' }] },
-    { elementType: 'labels.text.fill', stylers: [{ saturation: -100 }, { lightness: -20 }] },
-    { elementType: 'labels.text.stroke', stylers: [{ lightness: 95 }] }
+    // Strip all colour — full greyscale
+    { elementType: 'all',                  stylers: [{ saturation: -100 }] },
+
+    // Canvas — medium grey so white roads contrast clearly
+    { featureType: 'landscape',            elementType: 'geometry',        stylers: [{ lightness: 72 }] },
+    { featureType: 'administrative',       elementType: 'geometry',        stylers: [{ lightness: 60 }] },
+    { featureType: 'poi',                  elementType: 'geometry',        stylers: [{ lightness: 78 }] },
+    { featureType: 'poi.park',             elementType: 'geometry',        stylers: [{ lightness: 75 }] },
+
+    // Local roads — white fill, visible grey stroke
+    { featureType: 'road',                 elementType: 'geometry.fill',   stylers: [{ lightness: 100 }] },
+    { featureType: 'road',                 elementType: 'geometry.stroke', stylers: [{ lightness: 40 }] },
+
+    // Arterial roads — slightly off-white, darker stroke
+    { featureType: 'road.arterial',        elementType: 'geometry.fill',   stylers: [{ lightness: 96 }] },
+    { featureType: 'road.arterial',        elementType: 'geometry.stroke', stylers: [{ lightness: 30 }] },
+
+    // Highways — most prominent
+    { featureType: 'road.highway',         elementType: 'geometry.fill',   stylers: [{ lightness: 92 }] },
+    { featureType: 'road.highway',         elementType: 'geometry.stroke', stylers: [{ lightness: 10 }] },
+
+    // Transit
+    { featureType: 'transit.line',         elementType: 'geometry',        stylers: [{ lightness: 55 }] },
+
+    // Water — darker so it reads clearly
+    { featureType: 'water',                elementType: 'geometry',        stylers: [{ lightness: 45 }] },
+
+    // Labels — hide icons & POI clutter, keep road/place text
+    { elementType: 'labels.icon',          stylers: [{ visibility: 'off' }] },
+    { featureType: 'poi',                  elementType: 'labels',          stylers: [{ visibility: 'off' }] },
+    { elementType: 'labels.text.fill',     stylers: [{ saturation: -100 }, { lightness: -40 }] },
+    { elementType: 'labels.text.stroke',   stylers: [{ lightness: 90 }] },
 ];
 
 var PIN_SVG = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
