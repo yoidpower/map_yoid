@@ -73,13 +73,27 @@ $mapsKey = $_ENV['GOOGLE_MAPS_KEY'] ?? getenv('GOOGLE_MAPS_KEY') ?: 'AIzaSyB27M0
         .iw-badge       { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; background: #f0ebfa; color: #5b21b6; }
         .iw-badge .dot  { width: 6px; height: 6px; border-radius: 50%; background: #7c3aed; }
 
-        /* ── Google Places ── */
-        .pac-container  { border-radius: 10px !important; box-shadow: 0 6px 18px rgba(0,0,0,0.10) !important; border: 1px solid rgba(0,0,0,0.07) !important; font-family: inherit !important; font-size: 14px !important; margin-top: 4px; }
-        .pac-item       { padding: 7px 12px !important; border: none !important; cursor: pointer; }
-        .pac-item:hover,.pac-item-selected { background: #f5f5f5 !important; }
-        .pac-item .pac-item-query { font-weight: 500 !important; color: #000 !important; font-size: 14px !important; }
-        .pac-item span  { font-size: 12px !important; color: #888 !important; }
-        div.pac-container:after { display: none !important; }
+        /* ── Station search dropdown ── */
+        .search-wrap    { position: relative; flex-shrink: 0; }
+        #search-results {
+            display: none;
+            position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.10);
+            max-height: 320px; overflow-y: auto;
+        }
+        .sr-item {
+            padding: 10px 14px; cursor: pointer;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .sr-item:last-child { border-bottom: none; }
+        .sr-item:hover, .sr-item.active { background: #f5f2ff; }
+        .sr-title   { font-size: 14px; font-weight: 600; color: #111; }
+        .sr-address { font-size: 12px; color: #888; margin-top: 2px; }
+        .sr-empty   { padding: 12px 14px; font-size: 13px; color: #aaa; cursor: default; }
     </style>
 </head>
 <body>
@@ -93,13 +107,16 @@ $mapsKey = $_ENV['GOOGLE_MAPS_KEY'] ?? getenv('GOOGLE_MAPS_KEY') ?: 'AIzaSyB27M0
     <span id="station-count">Loading…</span>
 </header>
 
+<div class="search-wrap">
 <div class="search-bar">
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" style="flex-shrink:0">
         <circle cx="8.5" cy="8.5" r="6.5" stroke="#bbb" stroke-width="2"/>
         <path d="M13.5 13.5L18 18" stroke="#bbb" stroke-width="2" stroke-linecap="round"/>
     </svg>
-    <input id="search-input" type="text" placeholder="Search address or location…" autocomplete="off">
+    <input id="search-input" type="text" placeholder="Search station name or city…" autocomplete="off">
     <button id="clear-btn" onclick="clearSearch()" aria-label="Clear">×</button>
+</div>
+<div id="search-results"></div>
 </div>
 
 <div id="map"></div>
@@ -175,7 +192,7 @@ var clusterRenderer = {
     }
 };
 
-var map, infoWin, clusterer, searchMarker, markerList = [];
+var map, infoWin, clusterer, markerList = [], stationIndex = [];
 var PIN_SIZE, PIN_ANCHOR;
 
 function initMap() {
@@ -215,9 +232,22 @@ function loadStations() {
         });
 }
 
+function openStationInfo(st, mk) {
+    infoWin.setContent(
+        '<div class="iw">' +
+        '<div class="iw-title">' + esc(st.title) + '</div>' +
+        (st.serial ? '<div class="iw-serial">' + esc(st.serial) + '</div>' : '') +
+        '<div class="iw-address">' + esc(st.address) + '</div>' +
+        '<span class="iw-badge"><span class="dot"></span>Online</span>' +
+        '</div>'
+    );
+    infoWin.open({ anchor: mk, map: map });
+}
+
 function renderMarkers(list) {
     markerList.forEach(function(m) { m.setMap(null); });
     markerList = [];
+    stationIndex = [];
     clusterer.clearMarkers();
     list.forEach(function(s) {
         var m = new google.maps.Marker({
@@ -226,17 +256,8 @@ function renderMarkers(list) {
             title: s.title
         });
         (function(st, mk) {
-            mk.addListener('click', function() {
-                infoWin.setContent(
-                    '<div class="iw">' +
-                    '<div class="iw-title">' + esc(st.title) + '</div>' +
-                    (st.serial ? '<div class="iw-serial">' + esc(st.serial) + '</div>' : '') +
-                    '<div class="iw-address">' + esc(st.address) + '</div>' +
-                    '<span class="iw-badge"><span class="dot"></span>Online</span>' +
-                    '</div>'
-                );
-                infoWin.open({ anchor: mk, map: map });
-            });
+            mk.addListener('click', function() { openStationInfo(st, mk); });
+            stationIndex.push({ station: st, marker: mk });
         })(s, m);
         markerList.push(m);
     });
@@ -256,44 +277,66 @@ function esc(str) {
 }
 
 function setupSearch() {
-    var input = document.getElementById('search-input');
-    var ac = new google.maps.places.Autocomplete(input, {
-        types: ['geocode', 'establishment'],
-        componentRestrictions: { country: ['fr','de','nl','be','es','it','pl','se','dk','fi','pt','at','ie','gr','cz','hu','sk','si','hr','lt','lv','ee','bg','ro'] }
-    });
-    ac.addListener('place_changed', function() {
-        var place = ac.getPlace();
-        if (!place.geometry || !place.geometry.location) return;
-        document.getElementById('clear-btn').style.display = 'block';
-        if (searchMarker) searchMarker.setMap(null);
-        searchMarker = new google.maps.Marker({
-            position: place.geometry.location, map: map,
-            icon: { url: SEARCH_SVG, size: PIN_SIZE, scaledSize: PIN_SIZE, anchor: PIN_ANCHOR }
-        });
-        infoWin.setContent(
-            '<div class="iw">' +
-            '<div class="iw-title">' + esc(place.name || place.formatted_address || '') + '</div>' +
-            '<div class="iw-address">' + esc(place.formatted_address || '') + '</div>' +
-            '</div>'
-        );
-        infoWin.open({ anchor: searchMarker, map: map });
-        map.panTo(place.geometry.location);
-        map.setZoom(14);
-    });
+    var input   = document.getElementById('search-input');
+    var results = document.getElementById('search-results');
+    var clearBtn = document.getElementById('clear-btn');
+
     input.addEventListener('input', function() {
-        document.getElementById('clear-btn').style.display = this.value ? 'block' : 'none';
+        var q = this.value.trim().toLowerCase();
+        clearBtn.style.display = this.value ? 'block' : 'none';
+        if (!q) { results.style.display = 'none'; return; }
+
+        var matches = stationIndex.filter(function(entry) {
+            return entry.station.title.toLowerCase().indexOf(q) !== -1 ||
+                   entry.station.address.toLowerCase().indexOf(q) !== -1;
+        }).slice(0, 10);
+
+        if (!matches.length) {
+            results.innerHTML = '<div class="sr-empty">No stations found</div>';
+        } else {
+            results.innerHTML = matches.map(function(entry, i) {
+                return '<div class="sr-item" data-idx="' + i + '">' +
+                    '<div class="sr-title">' + esc(entry.station.title) + '</div>' +
+                    '<div class="sr-address">' + esc(entry.station.address) + '</div>' +
+                    '</div>';
+            }).join('');
+            results.querySelectorAll('.sr-item').forEach(function(el, i) {
+                el.addEventListener('click', function() {
+                    var entry = matches[i];
+                    map.panTo(entry.marker.getPosition());
+                    map.setZoom(15);
+                    openStationInfo(entry.station, entry.marker);
+                    results.style.display = 'none';
+                    input.value = entry.station.title;
+                    clearBtn.style.display = 'block';
+                });
+            });
+        }
+        results.style.display = 'block';
+    });
+
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') clearSearch();
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.search-wrap')) {
+            results.style.display = 'none';
+        }
     });
 }
 
 function clearSearch() {
-    document.getElementById('search-input').value = '';
+    var input = document.getElementById('search-input');
+    input.value = '';
     document.getElementById('clear-btn').style.display = 'none';
-    if (searchMarker) { searchMarker.setMap(null); searchMarker = null; }
+    document.getElementById('search-results').style.display = 'none';
     infoWin.close();
 }
 </script>
 
-<script src="https://maps.googleapis.com/maps/api/js?key=<?= htmlspecialchars($mapsKey) ?>&libraries=places&loading=async&callback=initMap" async defer></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=<?= htmlspecialchars($mapsKey) ?>&loading=async&callback=initMap" async defer></script>
 
 </body>
 </html>
