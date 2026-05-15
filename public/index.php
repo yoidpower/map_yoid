@@ -78,6 +78,42 @@ $mapsKey = $_ENV['GOOGLE_MAPS_KEY'] ?? getenv('GOOGLE_MAPS_KEY') ?: 'AIzaSyB27M0
         .iw-badge       { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; background: #f0ebfa; color: #5b21b6; }
         .iw-badge .dot  { width: 6px; height: 6px; border-radius: 50%; background: #7c3aed; }
 
+        /* ── Lightbox ── */
+        #lightbox {
+            display: none; position: fixed; inset: 0; z-index: 9999;
+            background: rgba(0,0,0,0.93);
+            align-items: center; justify-content: center;
+            cursor: zoom-out;
+            animation: lbFade .18s ease;
+        }
+        #lightbox.open { display: flex; }
+        @keyframes lbFade { from { opacity: 0 } to { opacity: 1 } }
+        #lightbox-img {
+            max-width: 90vw; max-height: 85vh;
+            object-fit: contain; border-radius: 8px;
+            box-shadow: 0 8px 48px rgba(0,0,0,0.6);
+            cursor: default;
+        }
+        #lightbox-close {
+            position: absolute; top: 16px; right: 20px;
+            background: none; border: none; color: #fff;
+            font-size: 34px; line-height: 1; cursor: pointer; opacity: .7;
+        }
+        #lightbox-close:hover { opacity: 1; }
+        #lightbox-label {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            color: rgba(255,255,255,.55); font-size: 13px; white-space: nowrap;
+        }
+        .lb-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,.15); border: none; color: #fff;
+            font-size: 26px; width: 46px; height: 46px; border-radius: 50%;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        .lb-nav:hover { background: rgba(255,255,255,.28); }
+        #lightbox-prev { left: 16px; }
+        #lightbox-next { right: 16px; }
+
         /* ── Station search dropdown ── */
         .search-wrap    { position: relative; flex-shrink: 0; }
         #search-results {
@@ -125,6 +161,14 @@ $mapsKey = $_ENV['GOOGLE_MAPS_KEY'] ?? getenv('GOOGLE_MAPS_KEY') ?: 'AIzaSyB27M0
 </div>
 
 <div id="map"></div>
+
+<div id="lightbox" onclick="closeLightbox()">
+    <button id="lightbox-close" onclick="closeLightbox()" aria-label="Close">×</button>
+    <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+    <button class="lb-nav" id="lightbox-prev" onclick="lbNav(-1,event)" aria-label="Previous">&#8249;</button>
+    <button class="lb-nav" id="lightbox-next" onclick="lbNav(1,event)"  aria-label="Next">&#8250;</button>
+    <div id="lightbox-label"></div>
+</div>
 
 <script src="https://unpkg.com/@googlemaps/markerclusterer@2/dist/index.min.js"></script>
 <script>
@@ -218,6 +262,9 @@ function initMap() {
         algorithm: new markerClusterer.SuperClusterAlgorithm({ radius: 80 })
     });
 
+    // Close info window when clicking empty map area
+    map.addListener('click', function() { infoWin.close(); });
+
     setupSearch();
     loadStations();
 }
@@ -237,16 +284,51 @@ function loadStations() {
         });
 }
 
+/* ── Lightbox ── */
+var lbPics = [], lbIdx = 0;
+
+function openLightbox(idx) {
+    lbIdx = idx;
+    lbShow();
+    document.getElementById('lightbox').classList.add('open');
+    document.addEventListener('keydown', lbKey);
+}
+function lbShow() {
+    var p = lbPics[lbIdx];
+    document.getElementById('lightbox-img').src = p.full;
+    document.getElementById('lightbox-label').textContent =
+        p.label + (lbPics.length > 1 ? '  ' + (lbIdx + 1) + ' / ' + lbPics.length : '');
+    var showNav = lbPics.length > 1;
+    document.getElementById('lightbox-prev').style.display = showNav ? 'flex' : 'none';
+    document.getElementById('lightbox-next').style.display = showNav ? 'flex' : 'none';
+}
+function lbNav(dir, e) {
+    e.stopPropagation();
+    lbIdx = (lbIdx + dir + lbPics.length) % lbPics.length;
+    lbShow();
+}
+function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('open');
+    document.getElementById('lightbox-img').src = '';
+    document.removeEventListener('keydown', lbKey);
+}
+function lbKey(e) {
+    if (e.key === 'Escape')      closeLightbox();
+    if (e.key === 'ArrowLeft')   { lbIdx = (lbIdx - 1 + lbPics.length) % lbPics.length; lbShow(); }
+    if (e.key === 'ArrowRight')  { lbIdx = (lbIdx + 1) % lbPics.length; lbShow(); }
+}
+
 function openStationInfo(st, mk) {
+    lbPics = st.pictures || [];
     var photosHtml = '';
-    if (st.pictures && st.pictures.length > 0) {
+    if (lbPics.length > 0) {
         photosHtml = '<div class="iw-photos">';
-        st.pictures.forEach(function(p) {
+        lbPics.forEach(function(p, idx) {
             photosHtml +=
                 '<div style="text-align:center">' +
-                '<a href="' + esc(p.full) + '" target="_blank" class="iw-photo-link">' +
+                '<div class="iw-photo-link" style="cursor:zoom-in" onclick="openLightbox(' + idx + ')">' +
                 '<img src="' + esc(p.thumb) + '" alt="' + esc(p.label) + '" class="iw-photo">' +
-                '</a>' +
+                '</div>' +
                 '<div class="iw-photo-label">' + esc(p.label) + '</div>' +
                 '</div>';
         });
