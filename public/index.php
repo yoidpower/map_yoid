@@ -66,10 +66,15 @@ $mapsKey = $_ENV['GOOGLE_MAPS_KEY'] ?? getenv('GOOGLE_MAPS_KEY') ?: 'AIzaSyB27M0
         .gm-style-iw-c  { border-radius: 10px !important; padding: 0 !important; box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important; }
         .gm-style-iw-d  { overflow: hidden !important; padding: 0 !important; }
         .gm-style-iw-chr{ display: none !important; }
-        .iw             { padding: 13px 15px; min-width: 185px; max-width: 260px; }
+        .iw             { padding: 13px 15px; min-width: 200px; max-width: 290px; }
         .iw-title       { font-size: 14px; font-weight: 700; color: #111; margin-bottom: 3px; }
         .iw-serial      { font-size: 11px; color: #aaa; margin-bottom: 5px; font-family: monospace; }
         .iw-address     { font-size: 12px; color: #666; line-height: 1.5; margin-bottom: 8px; }
+        .iw-photos      { display: flex; gap: 6px; margin-bottom: 10px; }
+        .iw-photo-link  { display: block; width: 80px; height: 80px; border-radius: 6px; overflow: hidden; border: 1px solid #e5e7eb; flex-shrink: 0; text-decoration: none; }
+        .iw-photo-link:hover { opacity: 0.85; }
+        .iw-photo       { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .iw-photo-label { font-size: 10px; color: #aaa; text-align: center; margin-top: 2px; }
         .iw-badge       { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; background: #f0ebfa; color: #5b21b6; }
         .iw-badge .dot  { width: 6px; height: 6px; border-radius: 50%; background: #7c3aed; }
 
@@ -233,11 +238,26 @@ function loadStations() {
 }
 
 function openStationInfo(st, mk) {
+    var photosHtml = '';
+    if (st.pictures && st.pictures.length > 0) {
+        photosHtml = '<div class="iw-photos">';
+        st.pictures.forEach(function(p) {
+            photosHtml +=
+                '<div style="text-align:center">' +
+                '<a href="' + esc(p.full) + '" target="_blank" class="iw-photo-link">' +
+                '<img src="' + esc(p.thumb) + '" alt="' + esc(p.label) + '" class="iw-photo">' +
+                '</a>' +
+                '<div class="iw-photo-label">' + esc(p.label) + '</div>' +
+                '</div>';
+        });
+        photosHtml += '</div>';
+    }
     infoWin.setContent(
         '<div class="iw">' +
         '<div class="iw-title">' + esc(st.title) + '</div>' +
         (st.serial ? '<div class="iw-serial">' + esc(st.serial) + '</div>' : '') +
         '<div class="iw-address">' + esc(st.address) + '</div>' +
+        photosHtml +
         '<span class="iw-badge"><span class="dot"></span>Online</span>' +
         '</div>'
     );

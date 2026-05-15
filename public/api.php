@@ -69,14 +69,26 @@ foreach ($dom->getElementsByTagName('input') as $input) {
         continue;
     }
 
+    $rawPics = $input->getAttribute('data-pictures');
+    $pictures = [];
+    foreach (json_decode($rawPics ?: '[]', true) ?: [] as $pic) {
+        if (empty($pic['thumb'])) continue;
+        $pictures[] = [
+            'label' => $pic['label'] ?? '',
+            'thumb' => 'https://partners.yoidpower.com' . $pic['thumb'],
+            'full'  => 'https://partners.yoidpower.com' . ($pic['full'] ?? $pic['thumb']),
+        ];
+    }
+
     $stations[] = [
-        'id'      => $i++,
-        'title'   => html_entity_decode($input->getAttribute('station-title'), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
-        'serial'  => '',
-        'online'  => true,
-        'lat'     => (float)$geo['geometry']['lat'],
-        'lng'     => (float)$geo['geometry']['lng'],
-        'address' => str_replace('+', ' ', $geo['formatted_address'] ?? ''),
+        'id'       => $i++,
+        'title'    => html_entity_decode($input->getAttribute('station-title'), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+        'serial'   => '',
+        'online'   => true,
+        'lat'      => (float)$geo['geometry']['lat'],
+        'lng'      => (float)$geo['geometry']['lng'],
+        'address'  => str_replace('+', ' ', $geo['formatted_address'] ?? ''),
+        'pictures' => $pictures,
     ];
 }
 
